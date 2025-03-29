@@ -22,6 +22,7 @@ function activate(context) {
 
 	// Initialize panel data storage
 	panel.fixData = null;
+	panel.targetDocument = null; // Store the target document reference
 	panel.webview.html = getWebviewContent('Set a coding goal to begin');
 
 	let setGoalCommand = vscode.commands.registerCommand('codeAssistant.setGoal', async () => {
@@ -36,6 +37,7 @@ function activate(context) {
 			// If there's already code in the editor, analyze it
 			if (vscode.window.activeTextEditor) {
 				const text = vscode.window.activeTextEditor.document.getText();
+				panel.targetDocument = vscode.window.activeTextEditor.document; // Store document reference
 				if (text.trim()) {
 					lastCode = text;
 					analyzeCode(text, codingGoal, panel);
@@ -48,6 +50,9 @@ function activate(context) {
 		if (!codingGoal || !event.document) return;
 
 		const text = event.document.getText();
+		// Update our targetDocument reference
+		panel.targetDocument = event.document;
+
 		// Only analyze if there are meaningful changes and we have a goal set
 		if (text === lastCode || text.trim() === '') return;
 
@@ -61,25 +66,49 @@ function activate(context) {
 
 	panel.webview.onDidReceiveMessage(async (message) => {
 		if (message.command === 'requestHelp') {
-			if (!vscode.window.activeTextEditor) {
+			// Check for any available editor
+			if (!vscode.window.activeTextEditor && vscode.window.visibleTextEditors.length === 0) {
 				panel.webview.html = getWebviewContent('Please open a file to get help', true);
 				return;
 			}
 
-			const text = vscode.window.activeTextEditor.document.getText();
+			// Use active editor or first visible editor
+			const editor = vscode.window.activeTextEditor || vscode.window.visibleTextEditors[0];
+			panel.targetDocument = editor.document; // Store the document reference
+			const text = editor.document.getText();
 			provideAssistance(text, codingGoal, panel);
 		} else if (message.command === 'applyFix') {
-			// Instead of immediately applying a fix, we'll get it from Gemini first
+			// Get fix from Gemini with improved reliability
 			getFixFromGemini(panel);
 		}
 	});
 
-
-// New function to get the fix directly from Gemini
+	// New improved function to get the fix directly from Gemini
 	async function getFixFromGemini(panel) {
-		const editor = vscode.window.activeTextEditor;
+		// Try to get an editor, either active or from visible editors
+		let editor = vscode.window.activeTextEditor;
+
+		// If no active editor, try to use the stored document reference
+		if (!editor && panel.targetDocument) {
+			try {
+				// Try to show the document to make it active
+				editor = await vscode.window.showTextDocument(panel.targetDocument);
+				console.log('Reactivated editor using stored document reference');
+			} catch (err) {
+				console.error('Failed to reactivate editor:', err);
+			}
+		}
+
+		// If still no editor, check visible editors
+		if (!editor && vscode.window.visibleTextEditors.length > 0) {
+			editor = vscode.window.visibleTextEditors[0];
+			console.log('Using first visible editor as fallback');
+		}
+
+		// If still no editor, show error and return
 		if (!editor) {
-			vscode.window.showErrorMessage("No active editor to apply fix to");
+			vscode.window.showErrorMessage("No active editor to apply fix to. Please open a file first.");
+			panel.webview.html = getWebviewContent('No active editor to apply fix to. Please open a file and try again.', true);
 			return;
 		}
 
@@ -87,11 +116,12 @@ function activate(context) {
 			panel.webview.html = getWebviewContent('Generating fix from Gemini...', true);
 
 			const code = editor.document.getText();
+			panel.targetDocument = editor.document; // Store the document reference
 			const goal = codingGoal || 'improve code quality';
 
 			console.log('Requesting direct fix from Gemini for goal:', goal);
 
-			// Specialized prompt for getting a clean code fix
+			// Improved prompt for cleaner, more reliable code fixes
 			const prompt = `My goal is: "${goal}".
 Here is my current code:
 \`\`\`
@@ -99,38 +129,65 @@ ${code}
 \`\`\`
 
 IMPORTANT: You must provide a complete fixed version of this code that addresses any issues.
-Do NOT explain the issues or the fixes.
-Only respond with the fixed code, wrapped in triple backticks.
-The code must be complete and ready to use.`;
+DO NOT include any explanations.
+DO NOT include any text before or after the code.
+ONLY respond with the complete fixed code.`;
 
-			const result = await model.generateContent(prompt);
-			const responseText = result.response.text();
+			// Add timeout for API call
+			const abortController = new AbortController();
+			const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15-second timeout
 
-			// Extract just the code block
-			const fixedCode = extractCodeBlock(responseText);
+			try {
+				const result = await model.generateContent(prompt);
+				clearTimeout(timeoutId);
 
-			if (fixedCode && fixedCode.trim() !== '') {
-				// Store the fix data and apply it
-				panel.fixData = fixedCode;
-				applyFixToEditor(panel);
-			} else {
-				// If we couldn't extract a code block, show an error
-				panel.webview.html = getWebviewContent(
-					"Couldn't generate a valid fix. Please try again.",
-					true,
-					false
-				);
+				const responseText = result.response.text();
+				console.log('Received response from Gemini:', responseText.substring(0, 100));
+
+				// Extract the code using improved extraction logic
+				const fixedCode = extractCodeImproved(responseText, code);
+
+				if (fixedCode && fixedCode.trim() !== '') {
+					console.log('Extracted fix:', fixedCode.substring(0, 100));
+
+					// Update UI to indicate we're applying the fix
+					panel.webview.html = getWebviewContent(
+						'Fix generated! Applying to editor...',
+						true
+					);
+
+					// Store the fix data and apply it
+					panel.fixData = fixedCode;
+					applyFixToEditor(panel);
+				} else {
+					console.error('Failed to extract valid code from response');
+					panel.webview.html = getWebviewContent(
+						"Couldn't extract a valid fix from Gemini's response. Please try again.",
+						true,
+						false
+					);
+				}
+			} catch (error) {
+				clearTimeout(timeoutId);
+				if (error.name === 'AbortError') {
+					console.error('Gemini API request timed out');
+					panel.webview.html = getWebviewContent(
+						"Request to Gemini timed out. Please try again.",
+						true
+					);
+				} else {
+					throw error; // Re-throw for the outer catch block
+				}
 			}
 		} catch (error) {
 			console.error('Failed to get fix from Gemini:', error);
 			vscode.window.showErrorMessage(`Failed to get fix: ${error.message}`);
 			panel.webview.html = getWebviewContent(
-				`Error getting fix from Gemini. Please try again later.`,
+				`Error getting fix from Gemini: ${error.message}. Please try again later.`,
 				true
 			);
 		}
 	}
-
 
 	context.subscriptions.push(setGoalCommand, changeListener, panel);
 }
@@ -188,64 +245,38 @@ async function provideAssistance(code, goal, panel) {
 
 		console.log('Requesting assistance for goal:', goal);
 
-		// Modified prompt to be more direct and structured for better extraction
+		// Improved prompt for better code extraction
 		const prompt = `My goal is: "${goal || 'writing efficient code'}".
 Here is my current code:
 \`\`\`
 ${code}
 \`\`\`
 
-IMPORTANT: You MUST provide a specific fix for this code.
-Your answer MUST follow this exact format:
-1. Brief explanation of the issue (1-2 sentences only)
-2. The word "FIXED CODE:" on its own line 
-3. Complete fixed code wrapped in triple backticks
-
-Example format:
-The issue is [explanation].
-
-FIXED CODE:
-\`\`\`
-[complete fixed code here]
-\`\`\``;
+First, briefly explain the issue in 1-2 sentences.
+Then, provide COMPLETE fixed code. Do not include partial fixes or code snippets.
+Make sure the fixed code addresses any issues related to the goal.`;
 
 		const result = await model.generateContent(prompt);
 		const responseText = result.response.text();
 
-		console.log('Gemini response:', responseText.substring(0, 100) + '...');
+		console.log('Gemini response received:', responseText.substring(0, 100) + '...');
 
-		// Enhanced code extraction
-		const fixedCode = extractCodeBlock(responseText);
+		// Extract explanation and code
+		const explanation = extractExplanation(responseText);
+		const fixedCode = extractCodeImproved(responseText, code);
+
+		console.log('Extracted explanation:', explanation);
 		console.log('Extracted code block:', fixedCode ? 'Found' : 'Not found');
-
-		// Create a simpler message for display
-		const explanation = responseText
-			.replace(/```[\s\S]*?```/g, '') // Remove code blocks
-			.split('\n')
-			.filter(line => line.trim()) // Remove empty lines
-			.slice(0, 2) // Take first two non-empty lines
-			.join(' ')
-			.trim();
 
 		let message;
 		let showFixButton = false;
 
-		if (fixedCode) {
+		if (fixedCode && fixedCode.trim() !== '') {
 			message = explanation || "I found an issue with your code. Click 'Apply Fix' to update it.";
 			showFixButton = true;
 			panel.fixData = fixedCode;
-			console.log('Fix data set:', fixedCode.substring(0, 50) + '...');
 		} else {
 			message = "I couldn't generate a specific fix. Please try requesting help again.";
-
-			// Try to generate a simple fix for common issues
-			const simpleFixedCode = generateSimpleFix(code, goal);
-			if (simpleFixedCode && simpleFixedCode !== code) {
-				panel.fixData = simpleFixedCode; // Store the fix in the panel object
-				showFixButton = true;
-				message = "I found a potential issue. Click 'Apply Fix' to update your code.";
-				console.log('Simple fix generated');
-			}
 		}
 
 		panel.webview.html = getWebviewContent(message, true, showFixButton);
@@ -293,110 +324,135 @@ function processAIResponse(response, goal) {
 	return processed;
 }
 
-function extractCodeBlock(response) {
-	console.log('Extracting code block...');
+// Improved code extraction function with multiple strategies
+function extractCodeImproved(response, originalCode) {
+	console.log('Extracting code using improved extractor...');
 
-	// Look for "FIXED CODE:" marker first
-	const fixedCodeMarkerIndex = response.indexOf('FIXED CODE:');
-	let searchText = response;
-
-	if (fixedCodeMarkerIndex !== -1) {
-		// Focus search on text after the marker
-		searchText = response.substring(fixedCodeMarkerIndex);
-		console.log('Found FIXED CODE marker');
-	}
-
-	// Enhanced regex to better match code blocks with or without language specifiers
+	// Strategy 1: Extract code between triple backticks
 	const codeBlockRegex = /```(?:[\w]*\n)?([\s\S]*?)```/g;
-	const matches = [...searchText.matchAll(codeBlockRegex)];
-
-	console.log('Code block matches found:', matches.length);
+	const matches = [...response.matchAll(codeBlockRegex)];
 
 	if (matches.length > 0) {
-		// Return the first code block found
+		console.log('Found code block using standard regex');
 		return matches[0][1].trim();
 	}
 
-	// Try a simpler regex as fallback
-	const simpleRegex = /```([\s\S]*?)```/g;
-	const simpleMatches = [...searchText.matchAll(simpleRegex)];
-
-	console.log('Simple code block matches found:', simpleMatches.length);
-
-	if (simpleMatches.length > 0) {
-		return simpleMatches[0][1].trim();
+	// Strategy 2: Look for indented blocks of code
+	const indentedLines = response.split('\n').filter(line => line.startsWith('    ') || line.startsWith('\t'));
+	if (indentedLines.length > 3) { // At least 3 lines to be considered a code block
+		console.log('Found code block using indentation');
+		return indentedLines.join('\n').trim();
 	}
 
-	// Last resort: look for code without proper markdown formatting
-	const indentedBlockRegex = /\n([ \t]+[\w\s=();.{}[\]"'+-/<>!]+\n)+/g;
-	const indentedMatches = [...searchText.matchAll(indentedBlockRegex)];
-
-	if (indentedMatches.length > 0) {
-		return indentedMatches[0][0].trim();
+	// Strategy 3: If the response is very short, it might be just the code
+	if (response.trim().length < 200 && (response.includes('=') || response.includes('print'))) {
+		console.log('Using entire response as code (short response)');
+		return response.trim();
 	}
 
-	return null;
-}
+	// Strategy 4: Look for code-like patterns
+	if (response.includes('print(') || response.includes('function') ||
+		response.includes('return') || response.includes('var ') ||
+		response.includes('const ') || response.includes('let ')) {
 
-function generateSimpleFix(code, goal) {
-	// This is a simple backup for when the AI doesn't provide a code block
-	console.log('Attempting to generate simple fix');
-
-	// You can expand this with more patterns based on common errors
-	if (code.includes('print(a-b)') && goal && goal.toLowerCase().includes('add')) {
-		return code.replace('print(a-b)', 'print(a+b)');
-	}
-
-	if (code.includes('print(a+b)') && goal && goal.toLowerCase().includes('subtract')) {
-		return code.replace('print(a+b)', 'print(a-b)');
-	}
-
-	// Handle other common fixes
-	if (code.includes('print(a=b)')) {
-		return code.replace('print(a=b)', 'print(a==b)');
-	}
-
-	// Check for missing semicolons in JavaScript
-	if ((code.includes('javascript') || code.includes('function') || code.includes('const ')) &&
-		!code.includes('python')) {
-		let fixedCode = code;
-		let lines = code.split('\n');
-		let hasChanges = false;
+		// Find the start and end of what looks like code
+		const lines = response.split('\n');
+		let startIdx = -1;
+		let endIdx = -1;
 
 		for (let i = 0; i < lines.length; i++) {
-			let line = lines[i].trim();
-			if (line &&
-				!line.endsWith(';') &&
-				!line.endsWith('{') &&
-				!line.endsWith('}') &&
-				!line.startsWith('//') &&
-				!line.startsWith('function') &&
-				!line.startsWith('if') &&
-				!line.startsWith('else') &&
-				!line.startsWith('for') &&
-				!line.startsWith('while')) {
-				lines[i] = lines[i] + ';';
-				hasChanges = true;
+			if ((lines[i].includes('=') || lines[i].includes('print(') ||
+				lines[i].includes('function') || lines[i].includes('return')) &&
+				startIdx === -1) {
+				startIdx = i;
+			}
+
+			if (startIdx !== -1 && lines[i].trim() === '' && i > startIdx + 2) {
+				endIdx = i;
+				break;
 			}
 		}
 
-		if (hasChanges) {
-			return lines.join('\n');
+		if (startIdx !== -1) {
+			endIdx = endIdx === -1 ? lines.length : endIdx;
+			console.log('Extracted code-like section from response');
+			return lines.slice(startIdx, endIdx).join('\n').trim();
 		}
 	}
 
-	// Remove any erroneous numbers like "55" that might be in the code
-	if (code.includes('55') && !code.match(/[a-zA-Z0-9_]55[a-zA-Z0-9_]/)) {
-		return code.replace(/\b55\b/g, '');
+	// Strategy 5: Compare with original code and extract significant differences
+	if (originalCode && originalCode.trim() !== '') {
+		const originalLines = originalCode.split('\n');
+		const responseLines = response.split('\n');
+
+		for (const line of responseLines) {
+			const trimmedLine = line.trim();
+			// Check if this line is different from any original line and looks like code
+			if (trimmedLine.length > 5 &&
+				!originalLines.some(origLine => origLine.trim() === trimmedLine) &&
+				(trimmedLine.includes('=') || trimmedLine.includes('print(') ||
+					trimmedLine.includes('function') || trimmedLine.includes('return'))) {
+
+				console.log('Found potential fix line:', trimmedLine);
+
+				// Try to construct a fix based on this different line
+				const newCode = originalLines.map(origLine => {
+					// If the original line contains something similar to what we're changing
+					if ((origLine.includes('print(') && trimmedLine.includes('print(')) ||
+						(origLine.includes('=') && trimmedLine.includes('='))) {
+						return trimmedLine;
+					}
+					return origLine;
+				}).join('\n');
+
+				return newCode;
+			}
+		}
 	}
 
-	return code; // Return original code if no patterns match
+	console.log('Could not extract code using any strategy');
+	return null;
 }
 
-function applyFixToEditor(panel) {
-	const editor = vscode.window.activeTextEditor;
+function extractExplanation(response) {
+	// Extract the first 1-2 sentences that are not code
+	const withoutCode = response.replace(/```[\s\S]*?```/g, '').trim();
+	const sentences = withoutCode.split(/[.!?]/).filter(s => s.trim().length > 0);
+
+	if (sentences.length > 0) {
+		return (sentences[0] + (sentences[1] ? '. ' + sentences[1] : '')).trim() + '.';
+	}
+
+	return '';
+}
+
+async function applyFixToEditor(panel) {
+	// Try multiple strategies to get a valid editor
+	let editor = vscode.window.activeTextEditor;
+
+	// Strategy 1: If no active editor but we have a targetDocument, try to open it
+	if (!editor && panel.targetDocument) {
+		try {
+			editor = await vscode.window.showTextDocument(panel.targetDocument);
+			console.log('Successfully reactivated document for applying fix');
+		} catch (err) {
+			console.error('Failed to reactivate document:', err);
+		}
+	}
+
+	// Strategy 2: If still no editor, try any visible editor
+	if (!editor && vscode.window.visibleTextEditors.length > 0) {
+		editor = vscode.window.visibleTextEditors[0];
+		console.log('Using first visible editor as fallback for applying fix');
+	}
+
+	// If still no editor, show error and return
 	if (!editor) {
 		vscode.window.showErrorMessage("No active editor to apply fix to");
+		panel.webview.html = getWebviewContent(
+			"No active editor to apply fix to. Please open a file and try again.",
+			true
+		);
 		return;
 	}
 
@@ -419,14 +475,30 @@ function applyFixToEditor(panel) {
 		return;
 	}
 
-	const fullRange = new vscode.Range(
-		editor.document.positionAt(0),
-		editor.document.positionAt(editor.document.getText().length)
-	);
+	// Create a proper edit with timeout
+	const applyEditPromise = new Promise((resolve, reject) => {
+		const timeoutId = setTimeout(() => {
+			reject(new Error('Edit operation timed out'));
+		}, 5000); // 5-second timeout for edit operation
 
-	editor.edit(editBuilder => {
-		editBuilder.replace(fullRange, panel.fixData);
-	}).then(success => {
+		const fullRange = new vscode.Range(
+			editor.document.positionAt(0),
+			editor.document.positionAt(editor.document.getText().length)
+		);
+
+		editor.edit(editBuilder => {
+			editBuilder.replace(fullRange, panel.fixData);
+		}).then(success => {
+			clearTimeout(timeoutId);
+			resolve(success);
+		}).catch(err => {
+			clearTimeout(timeoutId);
+			reject(err);
+		});
+	});
+
+	// Handle the edit operation with proper error handling
+	applyEditPromise.then(success => {
 		if (success) {
 			// Update UI after applying fix
 			panel.webview.html = getWebviewContent(
@@ -441,6 +513,12 @@ function applyFixToEditor(panel) {
 			);
 			console.log('Failed to apply fix');
 		}
+	}).catch(error => {
+		console.error('Error applying fix:', error);
+		panel.webview.html = getWebviewContent(
+			`Error applying fix: ${error.message}. Please try again.`,
+			true
+		);
 	});
 }
 
