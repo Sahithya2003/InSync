@@ -1,0 +1,39 @@
+{
+  "name": "CodeWhisperer",
+  "displayName": "CodeWhisperer",
+  "description": "Real-time Python code assistant powered by Gemini AI. Monitors your code as you write, detects issues, and offers intelligent solutions. Set session goals and get contextual help when you need it.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeAssistant.setGoal",
+        "title": "Set Coding Goal"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.98.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.23.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "axios": "^1.8.4"
+  }
+}
