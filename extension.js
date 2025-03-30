@@ -591,211 +591,530 @@ function getWebviewContent(message, showHelpButton = false, showFixButton = fals
 	const formattedMessage = message.replace(/\n/g, '<br>');
 
 	return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body { 
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-                    padding: 15px; 
-                    background-color: #1e1e1e; 
-                    color: #e0e0e0;
-                    margin: 0;
-                }
-                .container { 
-                    width: 100%;
-                }
-                .header {
-                    margin-bottom: 20px;
-                    display: flex;
-                    align-items: center;
-                }
-                .header h2 {
-                    margin: 0;
-                    padding: 0;
-                    color: #4CAF50;
-                }
-                .emoji {
-                    font-size: 1.5em;
-                    margin-right: 10px;
-                }
-                .card { 
-                    background: #252526; 
-                    padding: 15px; 
-                    border-radius: 6px; 
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    margin-bottom: 15px;
-                }
-                .info { color: #e0e0e0; }
-                .error { color: #ff6b6b; }
-                .success { color: #4CAF50; }
-                .loading { color: #FFD700; }
-                button { 
-                    background: #007acc; 
-                    color: white; 
-                    border: none; 
-                    padding: 8px 12px; 
-                    margin-top: 10px; 
-                    margin-right: 10px;
-                    cursor: pointer; 
-                    border-radius: 4px;
-                    font-weight: 500;
-                    transition: background 0.2s;
-                }
-                button:hover { background: #005f9e; }
-                .buttons {
-                    display: flex;
-                    gap: 10px;
-                    flex-wrap: wrap;
-                }
-                .timer-card {
-                    background: #2d2d2d;
-                    padding: 12px;
-                    border-radius: 6px;
-                    margin-top: 15px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                }
-                .timer-display {
-                    font-family: monospace;
-                    font-size: 1.2em;
-                    color: #e9e9e9;
-                    padding: 5px 10px;
-                    background: #1e1e1e;
-                    border-radius: 4px;
-                    margin-right: 10px;
-                }
-                .timer-buttons {
-                    display: flex;
-                    gap: 8px;
-                }
-                .timer-btn {
-                    background: #2a2a2a;
-                    color: #e0e0e0;
-                    border: 1px solid #3a3a3a;
-                    padding: 4px 8px;
-                    cursor: pointer;
-                    border-radius: 4px;
-                    font-size: 0.9em;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .timer-btn:hover {
-                    background: #3a3a3a;
-                }
-                .timer-btn.play { color: #4CAF50; }
-                .timer-btn.pause { color: #FFA500; }
-                .timer-btn.reset { color: #ff6b6b; }
-                .timer-label {
-                    font-size: 0.9em;
-                    color: #b0b0b0;
-                    margin-right: 10px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <span class="emoji">${messageType === 'success' ? '😊' :
-			messageType === 'error' ? '😕' :
-				messageType === 'loading' ? '⏳' : '🤔'
-		}</span>
-                    <h2>CodeWhisperer</h2>
-                </div>
-                
-                <div class="card">
-                    <p class="${messageType}">${formattedMessage}</p>
-                    
-                    <div class="buttons">
-                        ${showHelpButton ? '<button onclick="sendHelpRequest()">Request Help</button>' : ''}
-                        ${showFixButton ? '<button onclick="applyFix()">Apply Fix</button>' : ''}
-                    </div>
-                    
-                    <div class="timer-card">
-                        <div class="timer-label">Coding Time:</div>
-                        <div class="timer-display" id="timer-display">00:00:00</div>
-                        <div class="timer-buttons">
-                            <button id="timer-toggle" class="timer-btn play" onclick="toggleTimer()">
-                                ▶️ Play
-                            </button>
-                            <button class="timer-btn reset" onclick="resetTimer()">
-                                🔄 Reset
-                            </button>
-                        </div>
-                    </div>
-					<button onclick="openW3Schools()">W3Schools Reference</button>
-                </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        :root {
+          --bg-primary: #1e1e1e;
+          --bg-secondary: #252526;
+          --bg-tertiary: #2d2d2d;
+          --text-primary: #f0f0f0;
+          --text-secondary: #b0b0b0;
+          --accent-primary: #0e639c;
+          --accent-hover: #1177bb;
+          --accent-secondary: #4CAF50;
+          --error-color: #f44336;
+          --warning-color: #ff9800;
+          --success-color: #4CAF50;
+          --info-color: #2196F3;
+          --border-radius: 8px;
+          --shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+          --transition: all 0.2s ease;
+        }
+        
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+          padding: 0; 
+          background-color: var(--bg-primary); 
+          color: var(--text-primary);
+          margin: 0;
+          line-height: 1.5;
+          font-size: 14px;
+        }
+        
+        .container { 
+          width: 100%;
+          padding: 20px;
+          box-sizing: border-box;
+        }
+        
+        .header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 20px;
+          padding-bottom: 15px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header-title {
+          display: flex;
+          align-items: center;
+        }
+        
+        .header h2 {
+          margin: 0;
+          padding: 0;
+          font-size: 1.6em;
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+        
+        .emoji {
+          font-size: 1.6em;
+          margin-right: 12px;
+        }
+        
+        .card { 
+          background: var(--bg-secondary); 
+          padding: 20px; 
+          border-radius: var(--border-radius); 
+          box-shadow: var(--shadow);
+          margin-bottom: 20px;
+          transition: var(--transition);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .card:hover {
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message-container {
+          padding: 15px;
+          border-radius: var(--border-radius);
+          margin-bottom: 20px;
+          background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .info { color: var(--text-primary); }
+        .error { color: var(--error-color); background: rgba(244, 67, 54, 0.1); }
+        .success { color: var(--success-color); background: rgba(76, 175, 80, 0.1); }
+        .loading { color: var(--warning-color); background: rgba(255, 152, 0, 0.1); }
+        
+        .buttons {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-top: 20px;
+        }
+        
+        button { 
+          background: var(--accent-primary); 
+          color: white; 
+          border: none; 
+          padding: 10px 16px; 
+          cursor: pointer; 
+          border-radius: var(--border-radius);
+          font-weight: 500;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.95em;
+        }
+        
+        button:hover { 
+          background: var(--accent-hover); 
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+          transform: translateY(0);
+        }
+        
+        .btn-icon {
+          margin-right: 8px;
+          font-size: 1.1em;
+        }
+        
+        .card-title {
+          margin: 0 0 15px 0;
+          font-size: 1.1em;
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+        
+        /* Timer Card */
+        .timer-card {
+          background: var(--bg-tertiary);
+          padding: 16px;
+          border-radius: var(--border-radius);
+          margin-top: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .timer-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 5px;
+        }
+        
+        .timer-label {
+          font-size: 1em;
+          color: var(--text-secondary);
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+        }
+        
+        .timer-label-icon {
+          margin-right: 8px;
+          color: var(--info-color);
+        }
+        
+        .timer-display-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: var(--border-radius);
+        }
+        
+        .timer-display {
+          font-family: monospace;
+          font-size: 1.6em;
+          color: var(--text-primary);
+          font-weight: bold;
+        }
+        
+        .timer-actions {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        
+        .timer-btn {
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text-primary);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          padding: 10px;
+          cursor: pointer;
+          border-radius: var(--border-radius);
+          font-size: 0.9em;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: var(--transition);
+          flex: 1;
+        }
+        
+        .timer-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+          transform: translateY(-2px);
+        }
+        
+        .timer-btn:active {
+          transform: translateY(0);
+        }
+        
+        .timer-btn-icon {
+          margin-right: 8px;
+          font-size: 1.1em;
+        }
+        
+        .timer-btn.play { color: var(--success-color); }
+        .timer-btn.pause { color: var(--warning-color); }
+        .timer-btn.reset { color: var(--error-color); }
+        
+        /* Resource links card */
+        .resources-card {
+          margin-top: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        
+        .resources-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        
+        .resources-title {
+          font-size: 1em;
+          color: var(--text-secondary);
+          font-weight: 600;
+          margin: 0;
+        }
+        
+        .resources-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: 10px;
+        }
+        
+        .resource-link {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: var(--border-radius);
+          padding: 12px;
+          text-align: center;
+          cursor: pointer;
+          transition: var(--transition);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        
+        .resource-link:hover {
+          background: rgba(255, 255, 255, 0.1);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .resource-icon {
+          font-size: 1.5em;
+          color: var(--info-color);
+        }
+        
+        .resource-text {
+          font-size: 0.9em;
+          color: var(--text-primary);
+        }
+
+        /* Progress bar for loading state */
+        .progress-container {
+          width: 100%;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+          overflow: hidden;
+          margin-top: 15px;
+        }
+        
+        .progress-bar {
+          height: 100%;
+          width: 30%;
+          background: var(--info-color);
+          border-radius: 2px;
+          animation: progressAnimation 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes progressAnimation {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(400%);
+          }
+        }
+
+        /* Tooltip */
+        .tooltip {
+          position: relative;
+          display: inline-block;
+        }
+
+        .tooltip:hover .tooltip-text {
+          visibility: visible;
+          opacity: 1;
+        }
+
+        .tooltip-text {
+          visibility: hidden;
+          background-color: rgba(0, 0, 0, 0.8);
+          color: #fff;
+          text-align: center;
+          border-radius: 6px;
+          padding: 8px 12px;
+          position: absolute;
+          z-index: 1;
+          bottom: 125%;
+          left: 50%;
+          transform: translateX(-50%);
+          opacity: 0;
+          transition: opacity 0.3s;
+          font-size: 0.85em;
+          width: 150px;
+          pointer-events: none;
+        }
+
+        .tooltip-text::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          margin-left: -5px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="header-title">
+            <span class="emoji">
+              ${messageType === 'success' ? '✨' :
+			messageType === 'error' ? '❗' :
+				messageType === 'loading' ? '⚙️' : '💡'
+		}
+            </span>
+            <h2>CodeWhisperer</h2>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="message-container ${messageType}">
+            <p>${formattedMessage}</p>
+            ${messageType === 'loading' ?
+			`<div class="progress-container">
+                <div class="progress-bar"></div>
+              </div>` : ''
+		}
+          </div>
+          
+          <div class="buttons">
+            ${showHelpButton ?
+			`<button onclick="sendHelpRequest()">
+                <span class="btn-icon">🔍</span> Request Help
+              </button>` : ''
+		}
+            ${showFixButton ?
+			`<button onclick="applyFix()">
+                <span class="btn-icon">✅</span> Apply Fix
+              </button>` : ''
+		}
+          </div>
+          
+          <!-- Timer Card -->
+          <div class="timer-card">
+            <div class="timer-header">
+              <div class="timer-label">
+                <span class="timer-label-icon">⏱️</span>
+                Coding Session
+              </div>
             </div>
             
-            <script>
-                const vscode = acquireVsCodeApi();
-                const timerToggleBtn = document.getElementById('timer-toggle');
-                const timerDisplay = document.getElementById('timer-display');
-                let timerRunning = false;
-                
-                function sendHelpRequest() {
-                    vscode.postMessage({ command: 'requestHelp' });
-                }
-                
-                function applyFix() {
-                    vscode.postMessage({ command: 'applyFix' });
-                }
-                function openW3Schools() {
-    vscode.postMessage({ command: 'openW3Schools' });
-}
-                function toggleTimer() {
-                    timerRunning = !timerRunning;
-                    vscode.postMessage({ command: 'toggleTimer' });
-                    
-                    // Toggle button appearance
-                    if (timerRunning) {
-                        timerToggleBtn.innerHTML = '⏸️ Pause';
-                        timerToggleBtn.classList.remove('play');
-                        timerToggleBtn.classList.add('pause');
-                    } else {
-                        timerToggleBtn.innerHTML = '▶️ Play';
-                        timerToggleBtn.classList.remove('pause');
-                        timerToggleBtn.classList.add('play');
-                    }
-                }
-                
-                function resetTimer() {
-                    vscode.postMessage({ command: 'resetTimer' });
-                    timerRunning = false;
-                    timerToggleBtn.innerHTML = '▶️ Play';
-                    timerToggleBtn.classList.remove('pause');
-                    timerToggleBtn.classList.add('play');
-                    timerDisplay.textContent = '00:00:00';
-                }
-                
-                // Listen for messages from the extension
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    if (message.command === 'updateTimer') {
-                        // Update timer display
-                        timerDisplay.textContent = message.time;
-                        
-                        // Update button state if needed
-                        if (timerRunning !== message.isRunning) {
-                            timerRunning = message.isRunning;
-                            if (timerRunning) {
-                                timerToggleBtn.innerHTML = '⏸️ Pause';
-                                timerToggleBtn.classList.remove('play');
-                                timerToggleBtn.classList.add('pause');
-                            } else {
-                                timerToggleBtn.innerHTML = '▶️ Play';
-                                timerToggleBtn.classList.remove('pause');
-                                timerToggleBtn.classList.add('play');
-                            }
-                        }
-                    }
-                });
-            </script>
-        </body>
-        </html>
-    `;
+            <div class="timer-display-container">
+              <div class="timer-display" id="timer-display">00:00:00</div>
+            </div>
+            
+            <div class="timer-actions">
+              <button id="timer-toggle" class="timer-btn play" onclick="toggleTimer()">
+                <span class="timer-btn-icon">▶️</span> Start Coding
+              </button>
+              <button class="timer-btn reset" onclick="resetTimer()">
+                <span class="timer-btn-icon">🔄</span> Reset
+              </button>
+            </div>
+          </div>
+          
+          <!-- Resources Card -->
+          <div class="resources-card">
+            <div class="resources-header">
+              <h3 class="resources-title">Helpful Resources</h3>
+            </div>
+            
+            <div class="resources-grid">
+              <div class="resource-link tooltip" onclick="openW3Schools()">
+                <span class="resource-icon">📚</span>
+                <span class="resource-text">W3Schools</span>
+                <span class="tooltip-text">HTML, CSS, JS references</span>
+              </div>
+              
+              <div class="resource-link tooltip" onclick="openMDN()">
+                <span class="resource-icon">🌐</span>
+                <span class="resource-text">MDN Web Docs</span>
+                <span class="tooltip-text">Comprehensive web documentation</span>
+              </div>
+              
+              <div class="resource-link tooltip" onclick="openStackOverflow()">
+                <span class="resource-icon">🔍</span>
+                <span class="resource-text">Stack Overflow</span>
+                <span class="tooltip-text">Find answers to coding questions</span>
+              </div>
+              
+              <div class="resource-link tooltip" onclick="openGitHub()">
+                <span class="resource-icon">📦</span>
+                <span class="resource-text">GitHub</span>
+                <span class="tooltip-text">Browse repositories for examples</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        const vscode = acquireVsCodeApi();
+        const timerToggleBtn = document.getElementById('timer-toggle');
+        const timerDisplay = document.getElementById('timer-display');
+        let timerRunning = false;
+        
+        function sendHelpRequest() {
+          vscode.postMessage({ command: 'requestHelp' });
+        }
+        
+        function applyFix() {
+          vscode.postMessage({ command: 'applyFix' });
+        }
+        
+        function openW3Schools() {
+          vscode.postMessage({ command: 'openW3Schools' });
+        }
+        
+        function openMDN() {
+          vscode.postMessage({ command: 'openResource', url: 'https://developer.mozilla.org/' });
+        }
+        
+        function openStackOverflow() {
+          vscode.postMessage({ command: 'openResource', url: 'https://stackoverflow.com/' });
+        }
+        
+        function openGitHub() {
+          vscode.postMessage({ command: 'openResource', url: 'https://github.com/' });
+        }
+        
+        function toggleTimer() {
+          timerRunning = !timerRunning;
+          vscode.postMessage({ command: 'toggleTimer' });
+          
+          // Toggle button appearance
+          if (timerRunning) {
+            timerToggleBtn.innerHTML = '<span class="timer-btn-icon">⏸️</span> Pause';
+            timerToggleBtn.classList.remove('play');
+            timerToggleBtn.classList.add('pause');
+          } else {
+            timerToggleBtn.innerHTML = '<span class="timer-btn-icon">▶️</span> Start Coding';
+            timerToggleBtn.classList.remove('pause');
+            timerToggleBtn.classList.add('play');
+          }
+        }
+        
+        function resetTimer() {
+          vscode.postMessage({ command: 'resetTimer' });
+          timerRunning = false;
+          timerToggleBtn.innerHTML = '<span class="timer-btn-icon">▶️</span> Start Coding';
+          timerToggleBtn.classList.remove('pause');
+          timerToggleBtn.classList.add('play');
+          timerDisplay.textContent = '00:00:00';
+        }
+        
+        // Listen for messages from the extension
+        window.addEventListener('message', event => {
+          const message = event.data;
+          if (message.command === 'updateTimer') {
+            // Update timer display
+            timerDisplay.textContent = message.time;
+            
+            // Update button state if needed
+            if (timerRunning !== message.isRunning) {
+              timerRunning = message.isRunning;
+              if (timerRunning) {
+                timerToggleBtn.innerHTML = '<span class="timer-btn-icon">⏸️</span> Pause';
+                timerToggleBtn.classList.remove('play');
+                timerToggleBtn.classList.add('pause');
+              } else {
+                timerToggleBtn.innerHTML = '<span class="timer-btn-icon">▶️</span> Start Coding';
+                timerToggleBtn.classList.remove('pause');
+                timerToggleBtn.classList.add('play');
+              }
+            }
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `;
 }
 
 function deactivate() {
