@@ -1042,4 +1042,3 @@ module.exports = {
 	activate,
 	deactivate
 };
-
