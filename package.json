@@ -1,6 +1,6 @@
 {
-  "name": "CodeWhisperer",
-  "displayName": "CodeWhisperer",
+  "name": "InSync",
+  "displayName": "InSync",
   "description": "Real-time Python code assistant powered by Gemini AI. Monitors your code as you write, detects issues, and offers intelligent solutions. Set session goals and get contextual help when you need it.",
   "version": "0.0.1",
   "engines": {
