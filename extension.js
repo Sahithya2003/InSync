@@ -10,6 +10,12 @@ function activate(context) {
 
 	let codingGoal = '';
 	let lastCode = '';
+	// Timer variables
+	let timerStartTime = null;
+	let timerRunning = false;
+	let timerElapsedTime = 0;
+	let timerInterval = null;
+
 	let panel = vscode.window.createWebviewPanel(
 		'codeAssistant',
 		'Code Assistant',
@@ -80,8 +86,56 @@ function activate(context) {
 		} else if (message.command === 'applyFix') {
 			// Get fix from Gemini with improved reliability
 			getFixFromGemini(panel);
+
+		}
+		else if (message.command === 'openW3Schools') {
+			vscode.env.openExternal(vscode.Uri.parse('https://www.w3schools.com/'));
+		} else if (message.command === 'toggleTimer') {
+			// Handle timer toggle
+			if (timerRunning) {
+				// Stop the timer
+				timerRunning = false;
+				clearInterval(timerInterval);
+				timerElapsedTime += (Date.now() - timerStartTime);
+			} else {
+				// Start the timer
+				timerRunning = true;
+				timerStartTime = Date.now();
+				timerInterval = setInterval(() => {
+					// Update the timer display every second
+					const currentElapsed = timerElapsedTime + (Date.now() - timerStartTime);
+					updateTimerDisplay(currentElapsed, panel);
+				}, 1000);
+			}
+
+			// Update the UI to reflect current timer state
+			updateTimerDisplay(timerElapsedTime + (timerRunning ? (Date.now() - timerStartTime) : 0), panel);
+		} else if (message.command === 'resetTimer') {
+			// Reset the timer
+			clearInterval(timerInterval);
+			timerRunning = false;
+			timerElapsedTime = 0;
+			timerStartTime = null;
+			updateTimerDisplay(0, panel);
 		}
 	});
+
+	function updateTimerDisplay(milliseconds, panel) {
+		// Format time as HH:MM:SS
+		const totalSeconds = Math.floor(milliseconds / 1000);
+		const hours = Math.floor(totalSeconds / 3600);
+		const minutes = Math.floor((totalSeconds % 3600) / 60);
+		const seconds = totalSeconds % 60;
+
+		const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+		// Send the updated time and state to the webview
+		panel.webview.postMessage({
+			command: 'updateTimer',
+			time: timeString,
+			isRunning: timerRunning
+		});
+	}
 
 	// New improved function to get the fix directly from Gemini
 	async function getFixFromGemini(panel) {
@@ -592,6 +646,52 @@ function getWebviewContent(message, showHelpButton = false, showFixButton = fals
                 .buttons {
                     display: flex;
                     gap: 10px;
+                    flex-wrap: wrap;
+                }
+                .timer-card {
+                    background: #2d2d2d;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                }
+                .timer-display {
+                    font-family: monospace;
+                    font-size: 1.2em;
+                    color: #e9e9e9;
+                    padding: 5px 10px;
+                    background: #1e1e1e;
+                    border-radius: 4px;
+                    margin-right: 10px;
+                }
+                .timer-buttons {
+                    display: flex;
+                    gap: 8px;
+                }
+                .timer-btn {
+                    background: #2a2a2a;
+                    color: #e0e0e0;
+                    border: 1px solid #3a3a3a;
+                    padding: 4px 8px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    font-size: 0.9em;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .timer-btn:hover {
+                    background: #3a3a3a;
+                }
+                .timer-btn.play { color: #4CAF50; }
+                .timer-btn.pause { color: #FFA500; }
+                .timer-btn.reset { color: #ff6b6b; }
+                .timer-label {
+                    font-size: 0.9em;
+                    color: #b0b0b0;
+                    margin-right: 10px;
                 }
             </style>
         </head>
@@ -612,11 +712,28 @@ function getWebviewContent(message, showHelpButton = false, showFixButton = fals
                         ${showHelpButton ? '<button onclick="sendHelpRequest()">Request Help</button>' : ''}
                         ${showFixButton ? '<button onclick="applyFix()">Apply Fix</button>' : ''}
                     </div>
+                    
+                    <div class="timer-card">
+                        <div class="timer-label">Coding Time:</div>
+                        <div class="timer-display" id="timer-display">00:00:00</div>
+                        <div class="timer-buttons">
+                            <button id="timer-toggle" class="timer-btn play" onclick="toggleTimer()">
+                                ▶️ Play
+                            </button>
+                            <button class="timer-btn reset" onclick="resetTimer()">
+                                🔄 Reset
+                            </button>
+                        </div>
+                    </div>
+					<button onclick="openW3Schools()">W3Schools Reference</button>
                 </div>
             </div>
             
             <script>
                 const vscode = acquireVsCodeApi();
+                const timerToggleBtn = document.getElementById('timer-toggle');
+                const timerDisplay = document.getElementById('timer-display');
+                let timerRunning = false;
                 
                 function sendHelpRequest() {
                     vscode.postMessage({ command: 'requestHelp' });
@@ -625,6 +742,56 @@ function getWebviewContent(message, showHelpButton = false, showFixButton = fals
                 function applyFix() {
                     vscode.postMessage({ command: 'applyFix' });
                 }
+                function openW3Schools() {
+    vscode.postMessage({ command: 'openW3Schools' });
+}
+                function toggleTimer() {
+                    timerRunning = !timerRunning;
+                    vscode.postMessage({ command: 'toggleTimer' });
+                    
+                    // Toggle button appearance
+                    if (timerRunning) {
+                        timerToggleBtn.innerHTML = '⏸️ Pause';
+                        timerToggleBtn.classList.remove('play');
+                        timerToggleBtn.classList.add('pause');
+                    } else {
+                        timerToggleBtn.innerHTML = '▶️ Play';
+                        timerToggleBtn.classList.remove('pause');
+                        timerToggleBtn.classList.add('play');
+                    }
+                }
+                
+                function resetTimer() {
+                    vscode.postMessage({ command: 'resetTimer' });
+                    timerRunning = false;
+                    timerToggleBtn.innerHTML = '▶️ Play';
+                    timerToggleBtn.classList.remove('pause');
+                    timerToggleBtn.classList.add('play');
+                    timerDisplay.textContent = '00:00:00';
+                }
+                
+                // Listen for messages from the extension
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (message.command === 'updateTimer') {
+                        // Update timer display
+                        timerDisplay.textContent = message.time;
+                        
+                        // Update button state if needed
+                        if (timerRunning !== message.isRunning) {
+                            timerRunning = message.isRunning;
+                            if (timerRunning) {
+                                timerToggleBtn.innerHTML = '⏸️ Pause';
+                                timerToggleBtn.classList.remove('play');
+                                timerToggleBtn.classList.add('pause');
+                            } else {
+                                timerToggleBtn.innerHTML = '▶️ Play';
+                                timerToggleBtn.classList.remove('pause');
+                                timerToggleBtn.classList.add('play');
+                            }
+                        }
+                    }
+                });
             </script>
         </body>
         </html>
